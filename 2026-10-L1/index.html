@@ -28,8 +28,14 @@
   header { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-top: env(safe-area-inset-top); }
   .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 12px 0 0; }
   .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width .35s; }
-  .meta { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; color: var(--faint); padding: 6px 0 10px; }
+  .meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 15px; color: var(--faint); padding: 2px 0 6px; }
   .meta b { font-weight: 600; color: var(--muted); }
+  .meta .l, .meta .r { display: flex; align-items: center; gap: 4px 14px; flex-wrap: wrap; }
+  .meta .r { justify-content: flex-end; text-align: right; }
+  /* «Назад» и «Начать заново» — на каждом экране, тихо, но под палец */
+  button.link { width: auto; min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--accent-ink);
+                font: 600 16px/1.2 var(--body); border-radius: 8px; }
+  button.link.sure { color: var(--bad); }
 
   main { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
   .chip { display: inline-block; font-size: 15px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft);
@@ -141,7 +147,9 @@
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="bar"><i id="bar"></i></div><div class="meta"><span id="where"></span><b id="count"></b></div></div></header>
+<header><div class="wrap"><div class="bar"><i id="bar"></i></div><div class="meta">
+  <span class="l"><button class="link" id="back" hidden>← Назад</button><span id="where"></span></span>
+  <span class="r"><b id="count"></b><button class="link" id="restart" hidden>Начать заново</button></span></div></div></header>
 <main><div class="wrap" id="view"></div></main>
 <footer><div class="wrap"><div id="actions"></div></div></footer>
 
@@ -153,6 +161,7 @@ const DATA = JSON.parse(document.getElementById("data").textContent);
 // адреса. На сайте его нет — клиенты видят обычный тренажёр.
 const EDIT = window.TRAINER_EDIT || null;
 const KEY = `trainer:${DATA.kind}:${DATA.lecture}:${DATA.title}`;
+const MEET = DATA.kind === "practice" ? "Практика" : "Лекция";
 const PLAT = { android: "Android", ios: "iPhone", phone: "Телефон", pc: "Компьютер" };
 const PAD = 0.02;           // промах в 2 % ширины рядом с рамкой — ещё попадание (догадка)
 const MIN_TAP = 48;         // рамка меньше пальца — растягиваем до 48 px
@@ -205,8 +214,27 @@ const next = () => go(st.pos + 1);
 function progress(pos) {
   $("#bar").style.width = `${Math.round(100 * pos / Math.max(1, frames.length))}%`;
   $("#count").textContent = pos >= 0 && pos < frames.length ? `${pos + 1} из ${frames.length}` : "";
-  $("#where").textContent = DATA.lecture ? `Лекция ${DATA.lecture}` : "";
+  $("#where").textContent = DATA.lecture ? `${MEET} ${DATA.lecture}` : "";
+  // В режиме правки — свои «Назад / Дальше» внизу; клиенту — в шапке.
+  $("#back").hidden = EDIT || pos <= 0;
+  $("#where").hidden = !$("#back").hidden && matchMedia("(max-width: 420px)").matches;
+  const r = $("#restart");
+  r.hidden = !!EDIT || pos < 0;
+  r.classList.remove("sure"); r.textContent = "Начать заново";
 }
+
+// «Назад» — шаг можно пройти ещё раз; в итог идёт первая попытка.
+$("#back").onclick = () => go(Math.max(0, Math.min(st.pos, frames.length) - 1));
+// «Начать заново» — со второго нажатия: случайный сброс жалко (confirm() на сайте не годится).
+$("#restart").onclick = () => {
+  const r = $("#restart");
+  if (!r.classList.contains("sure")) {
+    r.classList.add("sure"); r.textContent = "Точно заново? Нажмите ещё раз";
+    clearTimeout(r.t); r.t = setTimeout(() => { r.classList.remove("sure"); r.textContent = "Начать заново"; }, 4000);
+    return;
+  }
+  st = fresh(); save(); hello();
+};
 function buttons(html) { actions.innerHTML = html; }
 // На широком экране кнопки «Пройди сам» с телефоном — в правой колонке, под шагом.
 const WIDE = matchMedia("(min-width: 900px)");
@@ -226,7 +254,7 @@ function hello() {
   const resume = st.plats !== null && Object.keys(st.res).length > 0;
   const pick = new Set(st.plats || []);
   view.innerHTML = `<div class="hello">
-    <div class="kicker">Тренажёр${DATA.lecture ? ` · Лекция ${DATA.lecture}` : ""}</div>
+    <div class="kicker">Тренажёр${DATA.lecture ? ` · ${MEET} ${DATA.lecture}` : ""}</div>
     <h1>${esc(DATA.title)}</h1>
     <p class="muted">Повторите лекцию своими руками: нажимайте на экране туда, куда показывал лектор.
     Без оценок и спешки — ошибаться можно.</p>
@@ -383,7 +411,8 @@ function recall(f) {
 
 // --- итог ---
 function finish() {
-  $("#bar").style.width = "100%"; $("#count").textContent = "";
+  progress(frames.length);
+  $("#bar").style.width = "100%"; $("#back").hidden = !!EDIT;
   if (EDIT) {
     view.innerHTML = `<div class="hello"><div class="kicker">Режим правки</div><div class="big">Конец</div>
       <p class="muted">Все упражнения просмотрены. Правки уже сохранены.</p></div>`;

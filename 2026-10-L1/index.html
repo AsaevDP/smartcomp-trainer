@@ -153,7 +153,7 @@ const DATA = JSON.parse(document.getElementById("data").textContent);
 // адреса. На сайте его нет — клиенты видят обычный тренажёр.
 const EDIT = window.TRAINER_EDIT || null;
 const KEY = `trainer:${DATA.kind}:${DATA.lecture}:${DATA.title}`;
-const PLAT = { android: "Android", ios: "iPhone", pc: "Компьютер" };
+const PLAT = { android: "Android", ios: "iPhone", phone: "Телефон", pc: "Компьютер" };
 const PAD = 0.02;           // промах в 2 % ширины рядом с рамкой — ещё попадание (догадка)
 const MIN_TAP = 48;         // рамка меньше пальца — растягиваем до 48 px
 
@@ -175,7 +175,7 @@ let frames = [];
 function plan() {
   frames = [];
   DATA.exercises.forEach(ex => {
-    if (ex.platform && st.plats && !st.plats.includes(ex.platform)) return;
+    if (ex.platform && st.plats && !fits(ex.platform)) return;
     if (ex.kind === "walk") ex.screens.forEach((s, i) => frames.push({ ex, i, n: ex.screens.length, key: `${ex.id}/${i}` }));
     else if (ex.kind === "dodont") ex.cards.forEach((c, i) => frames.push({ ex, i, n: ex.cards.length, key: `${ex.id}/${i}` }));
     else frames.push({ ex, key: ex.id });
@@ -186,6 +186,9 @@ function plan() {
     if (ex) frames.push({ ex, key: `${id}/again`, again: true });
   });
 }
+
+// «phone» — шаги на любом телефоне: подходят и Android, и iPhone.
+function fits(p) { return st.plats.includes(p) || (p === "phone" && st.plats.some(x => x !== "pc")); }
 
 function go(pos) {
   st.pos = pos; save(); window.scrollTo(0, 0);
